@@ -1,12 +1,12 @@
 from django.db import models
 from django.contrib.auth.models import User
 from datetime import datetime, timedelta
+from allauth.socialaccount.models import SocialAccount
 
 
 class UserConfig(models.Model):
     """Store developer's configuration for daily reports"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='report_config')
-    github_token = models.CharField(max_length=255, help_text="GitHub personal access token")
     github_username = models.CharField(max_length=255, help_text="GitHub username")
     email = models.EmailField(help_text="Email to receive daily reports")
     report_time = models.TimeField(default="18:00", help_text="Time to send daily report (HH:MM)")
@@ -20,6 +20,18 @@ class UserConfig(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.github_username}"
+
+    @property
+    def github_token(self):
+        """Get GitHub access token from social account"""
+        try:
+            social_account = SocialAccount.objects.get(
+                user=self.user,
+                provider='github'
+            )
+            return social_account.socialaccount_ptr.extra_data.get('access_token')
+        except SocialAccount.DoesNotExist:
+            return None
 
 
 class GithubRepository(models.Model):

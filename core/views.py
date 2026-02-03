@@ -4,6 +4,7 @@ Django REST Framework Views and API Endpoints
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from datetime import date
 from core.models import UserConfig, Report, GithubRepository, Commit
@@ -21,12 +22,22 @@ class UserConfigViewSet(viewsets.ModelViewSet):
     API endpoints for managing user configurations
     """
     serializer_class = UserConfigSerializer
-    queryset = UserConfig.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Only return config for the current user"""
+        return UserConfig.objects.filter(user=self.request.user)
 
     @action(detail=True, methods=['post'])
     def verify_token(self, request, pk=None):
         """Verify if GitHub token is valid"""
         user_config = self.get_object()
+        if user_config.github_token is None:
+            return Response({
+                'token_valid': False,
+                'message': 'No GitHub token found'
+            })
+
         gh_service = GitHubService(user_config.github_token)
         is_valid = gh_service.verify_token()
 
@@ -97,13 +108,19 @@ class ReportViewSet(viewsets.ReadOnlyModelViewSet):
     API endpoints for viewing reports
     """
     serializer_class = ReportSerializer
-    queryset = Report.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Only return reports for the current user"""
+        return Report.objects.filter(
+            user_config__user=self.request.user
+        ).order_by('-report_date')
 
     @action(detail=False, methods=['get'])
     def today(self, request):
         """Get today's report"""
         today = date.today()
-        report = Report.objects.filter(report_date=today).first()
+        report = self.get_queryset().filter(report_date=today).first()
 
         if report:
             serializer = self.get_serializer(report)
@@ -117,7 +134,7 @@ class ReportViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def recent(self, request):
         """Get recent reports (last 7 days)"""
-        reports = Report.objects.all()[:7]
+        reports = self.get_queryset()[:7]
         serializer = self.get_serializer(reports, many=True)
         return Response(serializer.data)
 
@@ -127,13 +144,19 @@ class CommitViewSet(viewsets.ReadOnlyModelViewSet):
     API endpoints for viewing commits
     """
     serializer_class = CommitSerializer
-    queryset = Commit.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Only return commits for the current user"""
+        return Commit.objects.filter(
+            user_config__user=self.request.user
+        ).order_by('-commit_date')
 
     @action(detail=False, methods=['get'])
     def today(self, request):
         """Get today's commits"""
         today = date.today()
-        commits = Commit.objects.filter(commit_date__date=today)
+        commits = self.get_queryset().filter(commit_date__date=today)
         serializer = self.get_serializer(commits, many=True)
         return Response(serializer.data)
 
@@ -143,9 +166,13 @@ class GithubRepositoryViewSet(viewsets.ModelViewSet):
     API endpoints for managing GitHub repositories
     """
     serializer_class = GithubRepositorySerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return GithubRepository.objects.all()
+        """Only return repositories for the current user"""
+        return GithubRepository.objects.filter(
+            user_config__user=self.request.user
+        )
 
     @action(detail=True, methods=['post'])
     def toggle_monitoring(self, request, pk=None):

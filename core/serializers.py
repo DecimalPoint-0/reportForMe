@@ -14,16 +14,23 @@ class GithubRepositorySerializer(serializers.ModelSerializer):
 
 class UserConfigSerializer(serializers.ModelSerializer):
     repositories = GithubRepositorySerializer(many=True, read_only=True)
+    github_token = serializers.SerializerMethodField()
 
     class Meta:
         model = UserConfig
         fields = [
-            'id', 'github_token', 'github_username', 'email',
-            'report_time', 'timezone', 'is_active', 'repositories'
+            'id', 'github_username', 'email',
+            'report_time', 'timezone', 'is_active', 'repositories',
+            'github_token', 'created_at', 'updated_at'
         ]
-        extra_kwargs = {
-            'github_token': {'write_only': True},
-        }
+        read_only_fields = ['id', 'github_token', 'created_at', 'updated_at']
+
+    def get_github_token(self, obj):
+        """Return masked token for security"""
+        token = obj.github_token
+        if token:
+            return f"{token[:8]}...{token[-4:]}"
+        return None
 
 
 class ReportSerializer(serializers.ModelSerializer):
