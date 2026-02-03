@@ -148,7 +148,9 @@ class GitHubService:
         url = f"{self.base_url}/user"
         
         try:
-            response = requests.get(url, headers=self.headers, timeout=5)
+            print("I got here")
+            response = requests.get(url, headers=self.headers, timeout=50)
+            print("JSON Content:", response.json())
             return response.status_code == 200
         except requests.exceptions.RequestException:
             return False
